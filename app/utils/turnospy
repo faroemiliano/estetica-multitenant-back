@@ -1,0 +1,4 @@
+from datetime import datetime, timedelta
+
+def hay_solapamiento(inicio1, fin1, inicio2, fin2):
+    return inicio1 < fin2 and inicio2 < fin1
