@@ -15,7 +15,8 @@ def validar_disponibilidad(
 
     turnos = db.query(Turno).filter(
         Turno.estetica_id == estetica_id,
-        Turno.profesional_id == profesional_id
+        Turno.profesional_id == profesional_id,
+        Turno.estado.in_(["pendiente", "confirmado"]),
     ).all()
 
     for t in turnos:

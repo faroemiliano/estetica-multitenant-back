@@ -16,6 +16,7 @@ from app.dependencies import get_current_user
 from app.models.estetica import Estetica
 from app.models.servicio import Servicio
 from app.services.turnos_service import validar_disponibilidad
+from app.models.disponibilidadProfesional import DisponibilidadProfesional
 
 router = APIRouter()
 
@@ -49,6 +50,12 @@ def crear_turno(
         f"{body.fecha} {body.hora}",
         "%Y-%m-%d %H:%M"
     )
+
+    if hora_inicio <= datetime.now():
+        raise HTTPException(
+            400,
+            "No se puede reservar un horario pasado"
+        )
 
     ok = validar_disponibilidad(
         db=db,
@@ -98,75 +105,92 @@ def obtener_turnos(
 
     return turnos
 
-@router.get("/horarios-disponibles")
-def horarios_disponibles(
-    fecha: str,
-    user=Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+# @router.get("/horarios-disponibles")
+# def horarios_disponibles(
+#     fecha: str,
+#     profesional_id: int,
+#     user=Depends(get_current_user),
+#     db: Session = Depends(get_db)
+# ):
 
-    estetica = db.query(Estetica).filter(
-        Estetica.id == user["estetica_id"]
-    ).first()
+#     estetica = db.query(Estetica).filter(
+#         Estetica.id == user["estetica_id"]
+#     ).first()
 
-    if not estetica:
-        raise HTTPException(404, "Estética no encontrada")
+#     if not estetica:
+#         raise HTTPException(404, "Estética no encontrada")
 
-    from datetime import datetime, timedelta
+#     from datetime import datetime, timedelta
 
-    intervalo = timedelta(minutes=estetica.intervalo_turnos)
+#     intervalo = timedelta(minutes=estetica.intervalo_turnos)
 
-    # bloques del admin (JSON)
-    if estetica.horarios:
-        bloques = json.loads(estetica.horarios)
-    else:
-        bloques = [{
-            "inicio": estetica.hora_apertura.strftime("%H:%M"),
-            "fin": estetica.hora_cierre.strftime("%H:%M")
-        }]
+#     fecha_obj = datetime.strptime(
+#         fecha,
+#         "%Y-%m-%d"
+#     )
 
-    # turnos del día
-    inicio_dia = datetime.strptime(
-    fecha,
-    "%Y-%m-%d"
-)
+#     dia_semana = fecha_obj.weekday()
 
-    fin_dia = inicio_dia + timedelta(days=1)
+#     disponibilidad = db.query(
+#         DisponibilidadProfesional
+#     ).filter(
+#         DisponibilidadProfesional.profesional_id == profesional_id,
+#         DisponibilidadProfesional.dia_semana == dia_semana,
+#         DisponibilidadProfesional.activo == True
+#     ).first()
 
-    turnos = db.query(Turno).filter(
-        Turno.estetica_id == user["estetica_id"],
-        Turno.hora_inicio >= inicio_dia,
-        Turno.hora_inicio < fin_dia
-    ).all()
+#     if not disponibilidad:
+#         return []
 
-    ocupados = [(t.hora_inicio, t.hora_fin) for t in turnos]
+#     bloques = [{
+#         "inicio": disponibilidad.hora_inicio.strftime("%H:%M"),
+#         "fin": disponibilidad.hora_fin.strftime("%H:%M")
+#     }]
 
-    def solapa(a_inicio, a_fin, b_inicio, b_fin):
-        return a_inicio < b_fin and b_inicio < a_fin
+#     # turnos del día
+#     inicio_dia = datetime.strptime(
+#     fecha,
+#     "%Y-%m-%d"
+# )
 
-    horarios = []
+#     fin_dia = inicio_dia + timedelta(days=1)
 
-    for b in bloques:
+#     turnos = db.query(Turno).filter(
+#         Turno.estetica_id == user["estetica_id"],
+#         Turno.profesional_id == profesional_id,
+#         Turno.hora_inicio >= inicio_dia,
+#         Turno.hora_inicio < fin_dia,
+#         Turno.estado != "cancelado"
+#     ).all()
 
-        inicio = datetime.strptime(f"{fecha} {b['inicio']}", "%Y-%m-%d %H:%M")
-        fin = datetime.strptime(f"{fecha} {b['fin']}", "%Y-%m-%d %H:%M")
+#     ocupados = [(t.hora_inicio, t.hora_fin) for t in turnos]
 
-        actual = inicio
+#     def solapa(a_inicio, a_fin, b_inicio, b_fin):
+#         return a_inicio < b_fin and b_inicio < a_fin
 
-        while actual + intervalo <= fin:
+#     horarios = []
 
-            slot_inicio = actual
-            slot_fin = actual + intervalo
+#     for b in bloques:
 
-            if not any(
-                solapa(slot_inicio, slot_fin, o[0], o[1])
-                for o in ocupados
-            ):
-                horarios.append(actual.strftime("%H:%M"))
+#         inicio = datetime.strptime(f"{fecha} {b['inicio']}", "%Y-%m-%d %H:%M")
+#         fin = datetime.strptime(f"{fecha} {b['fin']}", "%Y-%m-%d %H:%M")
 
-            actual += intervalo
+#         actual = inicio
 
-    return horarios
+#         while actual + intervalo <= fin:
+
+#             slot_inicio = actual
+#             slot_fin = actual + intervalo
+
+#             if not any(
+#                 solapa(slot_inicio, slot_fin, o[0], o[1])
+#                 for o in ocupados
+#             ):
+#                 horarios.append(actual.strftime("%H:%M"))
+
+#             actual += intervalo
+
+#     return horarios
 
 
 @router.get("/mis-turnos", response_model=list[TurnoOut])
@@ -176,14 +200,36 @@ def obtener_mis_turnos(
 ):
 
     turnos = db.query(Turno).options(
-        joinedload(Turno.servicio)
+        joinedload(Turno.servicio),
+        joinedload(Turno.profesional)
     ).filter(
-        Turno.cliente_id == int(user["sub"])
+        Turno.cliente_id == int(user["sub"]),
+        Turno.visible_cliente == True
     ).order_by(
         Turno.hora_inicio
     ).all()
 
     return turnos
+
+@router.delete("/mis-turnos/{id}")
+def ocultar_turno(
+    id: int,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    turno = db.query(Turno).filter(
+        Turno.id == id,
+        Turno.cliente_id == int(user["sub"])
+    ).first()
+
+    if not turno:
+        raise HTTPException(404, "Turno no encontrado")
+
+    turno.visible_cliente = False
+
+    db.commit()
+
+    return {"ok": True}
 
 @router.put("/turnos/{id}/estado")
 def cambiar_estado_turno(
@@ -244,6 +290,19 @@ def cambiar_estado_turno(
     return turno
 
 
+@router.get("/estetica/horarios")
+def obtener_horarios(
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    estetica = db.query(Estetica).filter(
+        Estetica.id == user["estetica_id"]
+    ).first()
+
+    return {
+        "horarios": json.loads(estetica.horarios or "[]")
+    }
+
 @router.put("/estetica/horarios")
 def actualizar_horarios(
     body: dict,
@@ -263,3 +322,136 @@ def actualizar_horarios(
     db.commit()
 
     return {"ok": True}
+
+@router.get("/mis-turnos-archivados", response_model=list[TurnoOut])
+def obtener_turnos_archivados(
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return (
+        db.query(Turno)
+        .options(
+            joinedload(Turno.servicio),
+            joinedload(Turno.profesional)
+        )
+        .filter(
+            Turno.cliente_id == int(user["sub"]),
+            Turno.visible_cliente == False
+        )
+        .order_by(Turno.hora_inicio.desc())
+        .all()
+    )
+
+@router.put("/turnos/{id}/mostrar")
+def mostrar_turno(
+    id: int,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    turno = db.query(Turno).filter(
+        Turno.id == id,
+        Turno.cliente_id == int(user["sub"])
+    ).first()
+
+    if not turno:
+        raise HTTPException(404, "Turno no encontrado")
+
+    turno.visible_cliente = True
+
+    db.commit()
+
+    return {"ok": True}
+
+@router.get("/horarios-disponibles")
+def horarios_disponibles(
+    profesional_id: int,
+    fecha: str,
+    servicio_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user)
+):
+
+    servicio = db.query(Servicio).filter(
+        Servicio.id == servicio_id
+    ).first()
+
+    if not servicio:
+        raise HTTPException(404, "Servicio no encontrado")
+
+    duracion = servicio.duracion
+
+    dia_inicio = datetime.strptime(
+        fecha + " 00:00",
+        "%Y-%m-%d %H:%M"
+    )
+
+    dia_fin = datetime.strptime(
+        fecha + " 23:59",
+        "%Y-%m-%d %H:%M"
+    )
+
+    turnos = db.query(Turno).filter(
+        Turno.profesional_id == profesional_id,
+        Turno.hora_inicio >= dia_inicio,
+        Turno.hora_inicio <= dia_fin,
+        Turno.estado != "cancelado"
+    ).all()
+
+    numero_dia = dia_inicio.weekday()
+
+    disponibilidades = db.query(
+        DisponibilidadProfesional
+    ).filter(
+        DisponibilidadProfesional.profesional_id == profesional_id,
+        DisponibilidadProfesional.dia_semana == numero_dia,
+        DisponibilidadProfesional.activo == True
+    ).all()
+
+    horarios_libres = []
+
+    ahora = datetime.now()
+
+    for disp in disponibilidades:
+
+        inicio_jornada = datetime.combine(
+            dia_inicio.date(),
+            disp.hora_inicio
+        )
+
+        fin_jornada = datetime.combine(
+            dia_inicio.date(),
+            disp.hora_fin
+        )
+
+        actual = inicio_jornada
+
+        while actual + timedelta(minutes=duracion) <= fin_jornada:
+
+            posible_fin = actual + timedelta(
+                minutes=duracion
+            )
+
+            # Si el horario ya pasó, no mostrarlo
+            if actual <= ahora:
+                actual += timedelta(minutes=15)
+                continue
+
+            ocupado = False
+
+            for turno in turnos:
+
+                if (
+                    actual < turno.hora_fin
+                    and posible_fin > turno.hora_inicio
+                ):
+                    ocupado = True
+                    break
+
+            if not ocupado:
+                horarios_libres.append(
+                    actual.strftime("%H:%M")
+                )
+
+            actual += timedelta(minutes=15)
+
+    return horarios_libres

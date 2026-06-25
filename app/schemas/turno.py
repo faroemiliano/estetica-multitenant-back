@@ -3,6 +3,7 @@ from pydantic import BaseModel
 
 from app.schemas.servicio import ServicioOut
 from app.schemas.user import UserSimple
+from app.schemas.profesional import ProfesionalOut
 
 
 class TurnoCreate(BaseModel):
@@ -34,7 +35,9 @@ class TurnoOut(BaseModel):
 
     estado: str
 
-    servicio: ServicioOut
+    servicio: ServicioOut | None = None
+
+    profesional: ProfesionalOut | None = None
 
     cliente: UserSimple
 

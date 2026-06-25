@@ -9,6 +9,8 @@ class ServicioCreate(BaseModel):
     descripcion: str
 
     duracion: int
+    
+    categoria: str | None = None
 
     precio: float
 
@@ -24,6 +26,8 @@ class ServicioUpdate(BaseModel):
 
     duracion: int
 
+    categoria: str | None = None
+
     precio: float
 
     profesional_id: int | None = None
@@ -37,6 +41,8 @@ class ServicioOut(BaseModel):
     descripcion: str
 
     duracion: int
+
+    categoria: str | None = None
 
     precio: float
 

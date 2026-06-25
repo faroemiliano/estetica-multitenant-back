@@ -36,7 +36,8 @@ def crear_servicio(
         descripcion=body.descripcion,
         duracion=body.duracion,
         precio=body.precio,
-        profesional_id=body.profesional_id
+        profesional_id=body.profesional_id,
+        categoria=body.categoria
     )
 
     profesional = (
@@ -126,6 +127,10 @@ def editar_servicio(
     servicio.duracion =body.duracion
 
     servicio.precio =body.precio
+
+    servicio.categoria =body.categoria
+
+    print(body.model_dump())
 
     servicio.profesional_id =body.profesional_id
 

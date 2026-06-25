@@ -44,5 +44,6 @@ app.include_router(turnos_router)
 app.include_router(dashboard_router)
 app.include_router(profesionales_router)
 
+@app.get("/")
 def root():
     return {"message": "API funcionando"}

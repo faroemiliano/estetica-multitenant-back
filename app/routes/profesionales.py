@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models.profesional import Profesional
 from app.dependencies import get_current_user
-from app.schemas.profesional import ProfesionalCreate
+from app.schemas.profesional import ProfesionalCreate, ProfesionalUpdate
+from app.models.disponibilidadProfesional import DisponibilidadProfesional
 
 router = APIRouter()
 
@@ -64,7 +65,7 @@ def crear_profesional(
 @router.put("/profesionales/{id}")
 def editar_profesional(
     id: int,
-    body: ProfesionalCreate,
+    body: ProfesionalUpdate,
     user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -121,3 +122,46 @@ def eliminar_profesional(
     return {
         "message": "Profesional eliminado"
     }
+
+@router.get("/profesionales/{profesional_id}/disponibilidad")
+def obtener_disponibilidad(
+    profesional_id: int,
+    db: Session = Depends(get_db)
+):
+
+    disponibilidades = db.query(
+        DisponibilidadProfesional
+    ).filter(
+        DisponibilidadProfesional.profesional_id == profesional_id
+    ).all()
+
+    return disponibilidades
+
+@router.put("/profesionales/{profesional_id}/disponibilidad")
+def guardar_disponibilidad(
+    profesional_id: int,
+    body: list[dict],
+    db: Session = Depends(get_db)
+):
+
+    db.query(
+        DisponibilidadProfesional
+    ).filter(
+        DisponibilidadProfesional.profesional_id == profesional_id
+    ).delete()
+
+    for item in body:
+
+        nueva = DisponibilidadProfesional(
+            profesional_id=profesional_id,
+            dia_semana=item["dia_semana"],
+            hora_inicio=item["hora_inicio"],
+            hora_fin=item["hora_fin"],
+            activo=item["activo"]
+        )
+
+        db.add(nueva)
+
+    db.commit()
+
+    return {"ok": True}

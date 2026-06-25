@@ -18,3 +18,9 @@ class Profesional(Base):
         "Servicio",
         back_populates="profesional"
     )
+
+    disponibilidades = relationship(    
+        "DisponibilidadProfesional",
+        back_populates="profesional",
+        cascade="all, delete-orphan"
+)

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy import Boolean, Column, Integer, String, ForeignKey, DateTime
 
 from app.database import Base
 
@@ -25,6 +25,11 @@ class Turno(Base):
         Integer,
         ForeignKey("servicios.id")
     )
+
+    visible_cliente = Column(
+    Boolean,
+    default=True
+)
 
     estetica_id = Column(
         Integer,
@@ -54,3 +59,6 @@ class Turno(Base):
 
     cliente = relationship("User")
     
+    profesional = relationship(
+    "Profesional"
+)

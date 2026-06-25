@@ -11,3 +11,7 @@ class ProfesionalOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ProfesionalUpdate(BaseModel):
+    nombre: str        

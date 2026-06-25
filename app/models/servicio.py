@@ -35,6 +35,11 @@ class Servicio(Base):
         nullable=False
     )
 
+    categoria = Column(
+    String,
+    nullable=True
+)
+
     descripcion = Column(
         String
     )

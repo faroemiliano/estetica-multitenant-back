@@ -1,4 +1,7 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import extract
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models.cliente import Cliente
@@ -68,6 +71,8 @@ def obtener_mi_perfil(
 
     return cliente
 
+
+
 @router.post("/completar-perfil")
 def completar_perfil(
     body: ClienteCreate,
@@ -114,3 +119,23 @@ def completar_perfil(
     db.refresh(nuevo_cliente)
 
     return nuevo_cliente
+
+@router.get("/clientes/cumpleanios")
+def clientes_cumpleanios(
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    hoy = date.today()
+
+    clientes = (
+        db.query(Cliente)
+        .filter(
+            Cliente.estetica_id == user["estetica_id"],
+            Cliente.fecha_nacimiento.isnot(None),
+            extract("day", Cliente.fecha_nacimiento) == hoy.day,
+            extract("month", Cliente.fecha_nacimiento) == hoy.month,
+        )
+        .all()
+    )
+
+    return clientes
