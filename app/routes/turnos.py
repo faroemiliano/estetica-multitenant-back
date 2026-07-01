@@ -17,6 +17,8 @@ from app.models.estetica import Estetica
 from app.models.servicio import Servicio
 from app.services.turnos_service import validar_disponibilidad
 from app.models.disponibilidadProfesional import DisponibilidadProfesional
+from app.models.user import User
+from app.services.email_service import enviar_email
 
 router = APIRouter()
 
@@ -244,9 +246,18 @@ def cambiar_estado_turno(
     db: Session = Depends(get_db)
 ):
 
-    turno = db.query(Turno).filter(
-        Turno.id == id
-    ).first()
+    turno = (
+        db.query(Turno)
+        .options(
+            joinedload(Turno.cliente)
+                .joinedload(User.cliente),
+            joinedload(Turno.servicio)
+        )
+        .filter(
+            Turno.id == id
+        )
+        .first()
+    )
 
     if not turno:
 
@@ -286,6 +297,114 @@ def cambiar_estado_turno(
     db.commit()
 
     db.refresh(turno)
+
+    if estado in ["confirmado", "cancelado"]:
+
+        fecha = turno.hora_inicio.strftime("%d/%m/%Y")
+        hora = turno.hora_inicio.strftime("%H:%M")
+
+        servicio = turno.servicio.nombre
+
+        nombre = (
+            turno.cliente.cliente.nombre_completo
+            if turno.cliente.cliente
+            and turno.cliente.cliente.nombre_completo
+            else turno.cliente.nombre
+        )
+
+        email = turno.cliente.email
+
+        if estado == "confirmado":
+
+            asunto = "💖 Tu turno fue confirmado"
+
+            html = f"""
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; color: #444;">
+            
+                <h2 style="color:#ec4899;">
+                ¡Hola {nombre}! ✨
+                </h2>
+
+                <p>
+                    Queríamos avisarte que tu turno fue <strong>confirmado</strong>.
+                </p>
+
+                <div style="background:#fdf2f8;padding:16px;border-radius:12px;margin:20px 0;">
+                    <p><strong>📅 Fecha:</strong> {fecha}</p>
+                    <p><strong>🕒 Horario:</strong> {hora}</p>
+                    <p><strong>💅 Servicio:</strong> {servicio}</p>
+                </div>
+
+                <p>
+                    Te esperamos para disfrutar de tu experiencia con nosotros 💕
+                </p>
+
+                <p>
+                    Gracias por elegir nuestra estética.
+                </p>
+
+                <br>
+
+                <p style="color:#888;">
+                    Con cariño,<br>
+                    Equipo de la estética 🌸
+                </p>
+
+            </div>
+            """
+
+        else:
+
+            asunto = "🌸 Actualización sobre tu turno"
+
+            html = f"""
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; color: #444;">
+
+                <h2 style="color:#ec4899;">
+                    Hola {nombre}
+                </h2>
+
+                <p>
+                    Queríamos informarte que tu turno fue cancelado.
+                </p>
+
+                <div style="background:#fdf2f8;padding:16px;border-radius:12px;margin:20px 0;">
+                    <p><strong>📅 Fecha:</strong> {fecha}</p>
+                    <p><strong>🕒 Horario:</strong> {hora}</p>
+                    <p><strong>💅 Servicio:</strong> {servicio}</p>
+                </div>
+
+                <p>
+                    Si lo deseás, podés reservar un nuevo turno cuando te resulte más cómodo.
+                </p>
+
+                <p>
+                    Estaremos encantados de recibirte 💕
+                </p>
+
+                <br>
+
+                <p style="color:#888;">
+                    Con cariño,<br>
+                    Equipo de la estética 🌸
+                </p>
+
+            </div>
+            """
+
+        try:
+
+            enviar_email(
+                email,
+                asunto,
+                html
+            )
+
+            print(f"✅ Email enviado a {email}")
+
+        except Exception as e:
+
+            print("❌ Error enviando email:", str(e))
 
     return turno
 
