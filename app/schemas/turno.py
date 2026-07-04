@@ -21,7 +21,7 @@ class TurnoOut(BaseModel):
 
     id: int
 
-    cliente_id: int
+    cliente_id: int | None = None
 
     servicio_id: int
 
@@ -39,7 +39,7 @@ class TurnoOut(BaseModel):
 
     profesional: ProfesionalOut | None = None
 
-    cliente: UserSimple
+    cliente: UserSimple | None = None
 
     class Config:
 
