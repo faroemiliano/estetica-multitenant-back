@@ -59,6 +59,12 @@ class Servicio(Base):
         default=True
     )
 
+    requiere_whatsapp = Column(
+        Boolean,
+        default=False,
+        nullable=False
+    )
+
     profesional = relationship(
     "Profesional",
     back_populates="servicios"

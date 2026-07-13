@@ -37,7 +37,8 @@ def crear_servicio(
         duracion=body.duracion,
         precio=body.precio,
         profesional_id=body.profesional_id,
-        categoria=body.categoria
+        categoria=body.categoria,
+        requiere_whatsapp=body.requiere_whatsapp
     )
 
     profesional = (
@@ -129,6 +130,8 @@ def editar_servicio(
     servicio.precio =body.precio
 
     servicio.categoria =body.categoria
+
+    servicio.requiere_whatsapp = body.requiere_whatsapp
 
     print(body.model_dump())
 

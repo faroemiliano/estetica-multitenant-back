@@ -1,21 +1,22 @@
 from pydantic import BaseModel
 from app.schemas.profesional import ProfesionalOut
-class ServicioCreate(BaseModel):
 
-   
+
+class ServicioCreate(BaseModel):
 
     nombre: str
 
     descripcion: str
 
     duracion: int
-    
+
     categoria: str | None = None
 
     precio: float
 
     profesional_id: int | None = None
 
+    requiere_whatsapp: bool = False
 
 
 class ServicioUpdate(BaseModel):
@@ -32,6 +33,9 @@ class ServicioUpdate(BaseModel):
 
     profesional_id: int | None = None
 
+    requiere_whatsapp: bool = False
+
+
 class ServicioOut(BaseModel):
 
     id: int
@@ -47,6 +51,8 @@ class ServicioOut(BaseModel):
     precio: float
 
     profesional_id: int | None = None
+
+    requiere_whatsapp: bool = False
 
     profesional: ProfesionalOut | None = None
 
