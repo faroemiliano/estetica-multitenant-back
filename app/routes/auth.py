@@ -8,6 +8,11 @@ from sqlalchemy.orm import Session
 
 from google.oauth2 import id_token
 from google.auth.transport import requests
+import os
+import socket
+import urllib3.util.connection as urllib3_connection
+
+from dotenv import load_dotenv
 
 from app.security import create_access_token
 
@@ -21,6 +26,15 @@ from app.schemas.auth import GoogleAuthRequest
 from app.models.cliente import Cliente
 
 router = APIRouter()
+
+load_dotenv()
+
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+
+# En algunas redes locales macOS resuelve Google primero por IPv6 aunque no
+# tenga conectividad IPv6. Eso deja la validación del token esperando. Forzar
+# IPv4 evita el bloqueo y no afecta el protocolo HTTPS.
+urllib3_connection.allowed_gai_family = lambda: socket.AF_INET
 
 
 def get_db():
@@ -67,7 +81,9 @@ def google_login(
 
         google_user = id_token.verify_oauth2_token(
             body.credential,
-            requests.Request()
+            requests.Request(),
+            GOOGLE_CLIENT_ID,
+            clock_skew_in_seconds=10,
         )
 
         email = google_user.get("email")
