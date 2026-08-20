@@ -14,6 +14,8 @@ class TurnoCreate(BaseModel):
 
     hora: str
 
+    cliente_id: int | None = None
+
     
 
 

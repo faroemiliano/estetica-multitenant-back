@@ -5,7 +5,7 @@ from sqlalchemy import extract
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models.cliente import Cliente
-from app.schemas.clientes import ClienteCreate
+from app.schemas.clientes import ClienteCreate, ClienteAdminCreate
 from app.dependencies import get_current_user
 from app.models.user import User
 from app.models.turno import Turno
@@ -51,6 +51,52 @@ def crear_cliente(cliente: ClienteCreate, db: Session = Depends(get_db)):
         "message": "Cliente creado",
         "cliente_id": nuevo_cliente.id
     }
+
+
+@router.post("/admin/clientes")
+def crear_cliente_admin(
+    body: ClienteAdminCreate,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo un administrador puede crear clientes")
+
+    email = body.email.lower().strip() if body.email else None
+    if email and ("@" not in email or "." not in email.split("@")[-1]):
+        raise HTTPException(status_code=422, detail="Ingresá un email válido")
+    usuario = None
+
+    if email:
+        usuario = db.query(User).filter(User.email == email).first()
+        if usuario and usuario.estetica_id != user["estetica_id"]:
+            raise HTTPException(status_code=409, detail="Ese email pertenece a otra estética")
+        if usuario and usuario.cliente:
+            raise HTTPException(status_code=409, detail="Ya existe un cliente con ese email")
+
+    if not usuario:
+        usuario = User(
+            estetica_id=user["estetica_id"],
+            email=email,
+            nombre=body.nombre_completo.strip(),
+            role="cliente",
+        )
+        db.add(usuario)
+        db.flush()
+
+    nuevo_cliente = Cliente(
+        user_id=usuario.id,
+        estetica_id=user["estetica_id"],
+        email=email,
+        nombre_completo=body.nombre_completo.strip(),
+        fecha_nacimiento=body.fecha_nacimiento,
+        telefono=body.telefono.strip(),
+        perfil_completo=True,
+    )
+    db.add(nuevo_cliente)
+    db.commit()
+    db.refresh(nuevo_cliente)
+    return nuevo_cliente
 
 @router.get("/mi-perfil")
 def obtener_mi_perfil(

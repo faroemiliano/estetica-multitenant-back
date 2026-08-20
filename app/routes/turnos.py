@@ -18,6 +18,7 @@ from app.models.servicio import Servicio
 from app.services.turnos_service import validar_disponibilidad
 from app.models.disponibilidadProfesional import DisponibilidadProfesional
 from app.models.user import User
+from app.models.cliente import Cliente
 from app.services.email_service import enviar_email
 
 router = APIRouter()
@@ -75,8 +76,21 @@ def crear_turno(
 
     hora_fin = hora_inicio + timedelta(minutes=servicio.duracion)
 
+    usuario_cliente_id = int(user["sub"])
+
+    if user.get("role") == "admin":
+        if body.cliente_id is None:
+            raise HTTPException(400, "Seleccioná un cliente")
+        cliente = db.query(Cliente).filter(
+            Cliente.id == body.cliente_id,
+            Cliente.estetica_id == user["estetica_id"],
+        ).first()
+        if not cliente or not cliente.user_id:
+            raise HTTPException(404, "Cliente no encontrado")
+        usuario_cliente_id = cliente.user_id
+
     turno = Turno(
-        cliente_id=int(user["sub"]),
+        cliente_id=usuario_cliente_id,
         servicio_id=body.servicio_id,
         profesional_id=servicio.profesional_id,
         estetica_id=user["estetica_id"],
