@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 import json
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -22,6 +23,12 @@ from app.models.cliente import Cliente
 from app.services.email_service import enviar_email
 
 router = APIRouter()
+
+ZONA_HORARIA = ZoneInfo("America/Argentina/Buenos_Aires")
+
+
+def ahora_local():
+    return datetime.now(ZONA_HORARIA).replace(tzinfo=None)
 
 
 def get_db():
@@ -54,7 +61,7 @@ def crear_turno(
         "%Y-%m-%d %H:%M"
     )
 
-    if hora_inicio <= datetime.now():
+    if hora_inicio <= ahora_local():
         raise HTTPException(
             400,
             "No se puede reservar un horario pasado"
@@ -542,7 +549,7 @@ def horarios_disponibles(
 
     horarios_libres = []
 
-    ahora = datetime.now()
+    ahora = ahora_local()
 
     for disp in disponibilidades:
 
