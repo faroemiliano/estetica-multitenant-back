@@ -1,5 +1,8 @@
 from fastapi import FastAPI
 from sqlalchemy import text
+from alembic import command
+from alembic.config import Config
+from pathlib import Path
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -24,7 +27,13 @@ app = FastAPI()
 
 @app.on_event("startup")
 def actualizar_esquema_multitenant():
-    """Migración idempotente para instalaciones existentes sin Alembic."""
+    """Aplica las migraciones pendientes al iniciar el servicio."""
+    project_root = Path(__file__).resolve().parent.parent
+    alembic_config = Config(str(project_root / "alembic.ini"))
+    alembic_config.set_main_option("script_location", str(project_root / "migrations"))
+    command.upgrade(alembic_config, "head")
+
+    # Compatibilidad con bases existentes creadas antes de usar Alembic.
     with engine.begin() as connection:
         connection.execute(text(
             "ALTER TABLE esteticas "
