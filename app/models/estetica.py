@@ -46,3 +46,9 @@ class Estetica(Base):
     "Cliente",
     back_populates="estetica"
 )
+
+    memberships = relationship(
+        "Membership",
+        back_populates="estetica",
+        cascade="all, delete-orphan",
+    )

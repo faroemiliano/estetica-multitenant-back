@@ -5,7 +5,8 @@ from sqlalchemy import (
     String,
     Date,
     Text,
-    ForeignKey
+    ForeignKey,
+    UniqueConstraint,
 )
 
 from sqlalchemy.orm import relationship
@@ -14,6 +15,10 @@ from app.database import Base
 
 class Cliente(Base):
     __tablename__ = "clientes"
+    __table_args__ = (
+        UniqueConstraint("user_id", "estetica_id", name="uq_cliente_user_estetica"),
+        UniqueConstraint("email", "estetica_id", name="uq_cliente_email_estetica"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
 
@@ -27,9 +32,9 @@ class Cliente(Base):
         ForeignKey("users.id")
     )
 
-    google_id = Column(String, unique=True)
+    google_id = Column(String)
 
-    email = Column(String, unique=True)
+    email = Column(String)
 
     nombre_google = Column(String)
 
@@ -50,5 +55,5 @@ class Cliente(Base):
 
     user = relationship(
         "User",
-        back_populates="cliente"
+        back_populates="clientes"
     )

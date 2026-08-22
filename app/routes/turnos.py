@@ -6,13 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from sqlalchemy.orm import Session, joinedload
 
-from app.database import SessionLocal
+from app.database import get_db
 
 from app.models.turno import Turno
 
 from app.schemas.turno import TurnoCreate, TurnoOut
 
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_admin
 
 from app.models.estetica import Estetica
 from app.models.servicio import Servicio
@@ -31,17 +31,6 @@ def ahora_local():
     return datetime.now(ZONA_HORARIA).replace(tzinfo=None)
 
 
-def get_db():
-
-    db = SessionLocal()
-
-    try:
-        yield db
-
-    finally:
-        db.close()
-
-
 @router.post("/turnos")
 def crear_turno(
     body: TurnoCreate,
@@ -50,7 +39,9 @@ def crear_turno(
 ):
 
     servicio = db.query(Servicio).filter(
-        Servicio.id == body.servicio_id
+        Servicio.id == body.servicio_id,
+        Servicio.estetica_id == user["estetica_id"],
+        Servicio.activo.is_(True),
     ).first()
 
     if not servicio:
@@ -113,7 +104,7 @@ def crear_turno(
 
 @router.get("/turnos", response_model=list[TurnoOut])
 def obtener_turnos(
-    user = Depends(get_current_user),
+    user = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
 
@@ -227,6 +218,7 @@ def obtener_mis_turnos(
         joinedload(Turno.profesional)
     ).filter(
         Turno.cliente_id == int(user["sub"]),
+        Turno.estetica_id == user["estetica_id"],
         Turno.visible_cliente == True
     ).order_by(
         Turno.hora_inicio
@@ -242,7 +234,8 @@ def ocultar_turno(
 ):
     turno = db.query(Turno).filter(
         Turno.id == id,
-        Turno.cliente_id == int(user["sub"])
+        Turno.cliente_id == int(user["sub"]),
+        Turno.estetica_id == user["estetica_id"],
     ).first()
 
     if not turno:
@@ -267,15 +260,18 @@ def cambiar_estado_turno(
     db: Session = Depends(get_db)
 ):
 
+    if estado not in {"pendiente", "confirmado", "cancelado", "finalizado"}:
+        raise HTTPException(status_code=422, detail="Estado invalido")
+
     turno = (
         db.query(Turno)
         .options(
-            joinedload(Turno.cliente)
-                .joinedload(User.cliente),
+            joinedload(Turno.cliente),
             joinedload(Turno.servicio)
         )
         .filter(
-            Turno.id == id
+            Turno.id == id,
+            Turno.estetica_id == user["estetica_id"],
         )
         .first()
     )
@@ -287,21 +283,8 @@ def cambiar_estado_turno(
             detail="Turno no encontrado"
         )
 
-    # ADMIN puede todo
-    if user["role"] == "admin":
-
-        if (
-            turno.estetica_id
-            != user["estetica_id"]
-        ):
-
-            raise HTTPException(
-                status_code=403,
-                detail="Sin permisos"
-            )
-
-    # CLIENTE solo cancelar SU turno
-    else:
+    # CLIENTE solo puede cancelar su propio turno dentro del tenant actual.
+    if user["role"] != "admin":
 
         if (
             estado != "cancelado"
@@ -326,10 +309,13 @@ def cambiar_estado_turno(
 
         servicio = turno.servicio.nombre
 
+        perfil_cliente = db.query(Cliente).filter(
+            Cliente.user_id == turno.cliente_id,
+            Cliente.estetica_id == turno.estetica_id,
+        ).first()
         nombre = (
-            turno.cliente.cliente.nombre_completo
-            if turno.cliente.cliente
-            and turno.cliente.cliente.nombre_completo
+            perfil_cliente.nombre_completo
+            if perfil_cliente and perfil_cliente.nombre_completo
             else turno.cliente.nombre
         )
 
@@ -476,6 +462,7 @@ def obtener_turnos_archivados(
         )
         .filter(
             Turno.cliente_id == int(user["sub"]),
+            Turno.estetica_id == user["estetica_id"],
             Turno.visible_cliente == False
         )
         .order_by(Turno.hora_inicio.desc())
@@ -490,7 +477,8 @@ def mostrar_turno(
 ):
     turno = db.query(Turno).filter(
         Turno.id == id,
-        Turno.cliente_id == int(user["sub"])
+        Turno.cliente_id == int(user["sub"]),
+        Turno.estetica_id == user["estetica_id"],
     ).first()
 
     if not turno:
@@ -512,7 +500,10 @@ def horarios_disponibles(
 ):
 
     servicio = db.query(Servicio).filter(
-        Servicio.id == servicio_id
+        Servicio.id == servicio_id,
+        Servicio.estetica_id == user["estetica_id"],
+        Servicio.profesional_id == profesional_id,
+        Servicio.activo.is_(True),
     ).first()
 
     if not servicio:
@@ -531,6 +522,7 @@ def horarios_disponibles(
     )
 
     turnos = db.query(Turno).filter(
+        Turno.estetica_id == user["estetica_id"],
         Turno.profesional_id == profesional_id,
         Turno.hora_inicio >= dia_inicio,
         Turno.hora_inicio <= dia_fin,

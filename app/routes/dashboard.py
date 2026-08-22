@@ -2,27 +2,16 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from datetime import date, datetime, time
 
-from app.database import SessionLocal
-from app.dependencies import get_current_user
+from app.database import get_db
+from app.dependencies import require_admin
 from app.models.turno import Turno
 
 router = APIRouter()
 
 
-def get_db():
-
-    db = SessionLocal()
-
-    try:
-        yield db
-
-    finally:
-        db.close()
-
-
 @router.get("/dashboard/stats")
 def dashboard_stats(
-    user = Depends(get_current_user),
+    user = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
 

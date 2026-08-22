@@ -30,10 +30,3 @@ def get_db():
 
     finally:
         db.close()
-
-from app.models.user import User
-from app.models.cliente import Cliente
-from app.models.estetica import Estetica
-from app.models.servicio import Servicio
-from app.models.turno import Turno
-from app.models.profesional import Profesional

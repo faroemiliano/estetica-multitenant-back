@@ -40,8 +40,13 @@ class User(Base):
 
     estetica = relationship("Estetica")
 
-    cliente = relationship(
+    clientes = relationship(
         "Cliente",
         back_populates="user",
-        uselist=False
+    )
+
+    memberships = relationship(
+        "Membership",
+        back_populates="user",
+        cascade="all, delete-orphan",
     )

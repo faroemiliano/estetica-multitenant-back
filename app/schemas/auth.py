@@ -2,5 +2,4 @@ from pydantic import BaseModel
 
 class GoogleAuthRequest(BaseModel):
     credential: str
-
-    
+    slug: str

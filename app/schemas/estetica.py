@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from pydantic import Field
 
 class EsteticaCreate(BaseModel):
     nombre: str
@@ -13,6 +14,12 @@ class EsteticaCreate(BaseModel):
     direccion: str | None = None
 
     horarios: str | None = None
+
+
+class EsteticaProvision(EsteticaCreate):
+    admin_email: str
+    admin_nombre: str | None = None
+    slug: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", min_length=2, max_length=80)
 
 
 class EsteticaResponse(BaseModel):

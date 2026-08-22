@@ -1,29 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.database import SessionLocal
+from app.database import get_db
 from app.models.profesional import Profesional
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_admin
 from app.schemas.profesional import ProfesionalCreate, ProfesionalUpdate
 from app.models.disponibilidadProfesional import DisponibilidadProfesional
 
 router = APIRouter()
 
-def get_db():
-
-    db = SessionLocal()
-
-    try:
-        yield db
-
-    finally:
-        db.close()
-
-
 @router.get("/profesionales")
 def obtener_profesionales(
 
-    user = Depends(get_current_user),
+    user = Depends(require_admin),
 
     db: Session = Depends(get_db)
 
@@ -43,7 +32,7 @@ def crear_profesional(
 
     body: ProfesionalCreate,
 
-    user = Depends(get_current_user),
+    user = Depends(require_admin),
 
     db: Session = Depends(get_db)
 
@@ -66,7 +55,7 @@ def crear_profesional(
 def editar_profesional(
     id: int,
     body: ProfesionalUpdate,
-    user = Depends(get_current_user),
+    user = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
 
@@ -96,7 +85,7 @@ def editar_profesional(
 @router.delete("/profesionales/{id}")
 def eliminar_profesional(
     id: int,
-    user = Depends(get_current_user),
+    user = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
 
@@ -126,8 +115,16 @@ def eliminar_profesional(
 @router.get("/profesionales/{profesional_id}/disponibilidad")
 def obtener_disponibilidad(
     profesional_id: int,
+    user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+
+    profesional = db.query(Profesional).filter(
+        Profesional.id == profesional_id,
+        Profesional.estetica_id == user["estetica_id"],
+    ).first()
+    if not profesional:
+        raise HTTPException(status_code=404, detail="Profesional no encontrado")
 
     disponibilidades = db.query(
         DisponibilidadProfesional
@@ -141,8 +138,16 @@ def obtener_disponibilidad(
 def guardar_disponibilidad(
     profesional_id: int,
     body: list[dict],
+    user=Depends(require_admin),
     db: Session = Depends(get_db)
 ):
+
+    profesional = db.query(Profesional).filter(
+        Profesional.id == profesional_id,
+        Profesional.estetica_id == user["estetica_id"],
+    ).first()
+    if not profesional:
+        raise HTTPException(status_code=404, detail="Profesional no encontrado")
 
     db.query(
         DisponibilidadProfesional

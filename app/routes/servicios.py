@@ -2,31 +2,21 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from sqlalchemy.orm import Session, joinedload
 
-from app.database import SessionLocal
+from app.database import get_db
 
 from app.models.servicio import Servicio
 
 from app.schemas.servicio import ServicioCreate, ServicioUpdate, ServicioOut
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_admin
 from app.models.estetica import Estetica
 from app.models.profesional import Profesional
 
 router = APIRouter()
 
-def get_db():
-
-    db = SessionLocal()
-
-    try:
-        yield db
-
-    finally:
-        db.close()
-
 @router.post("/servicios")
 def crear_servicio(
     body: ServicioCreate,
-    user = Depends(get_current_user),
+    user = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
 
@@ -41,20 +31,13 @@ def crear_servicio(
         requiere_whatsapp=body.requiere_whatsapp
     )
 
-    profesional = (
-    db.query(Profesional)
-    .filter(
-        Profesional.id == body.profesional_id,
-        Profesional.estetica_id == user["estetica_id"]
-    )
-    .first()
-    )
-
-    if not profesional:
-        raise HTTPException(
-            status_code=400,
-            detail="Profesional inválida"
-        )
+    if body.profesional_id is not None:
+        profesional = db.query(Profesional).filter(
+            Profesional.id == body.profesional_id,
+            Profesional.estetica_id == user["estetica_id"]
+        ).first()
+        if not profesional:
+            raise HTTPException(status_code=400, detail="Profesional invalido")
 
     db.add(servicio)
 
@@ -93,7 +76,7 @@ def editar_servicio(
 
     body: ServicioUpdate,
 
-    user = Depends(get_current_user),
+    user = Depends(require_admin),
 
     db: Session = Depends(get_db)
 ):
@@ -101,7 +84,8 @@ def editar_servicio(
     servicio = db.query(
         Servicio
     ).filter(
-        Servicio.id == id
+        Servicio.id == id,
+        Servicio.estetica_id == user["estetica_id"],
     ).first()
 
     if not servicio:
@@ -109,16 +93,6 @@ def editar_servicio(
         raise HTTPException(
             status_code=404,
             detail="Servicio no encontrado"
-        )
-
-    if (
-        servicio.estetica_id
-        != user["estetica_id"]
-    ):
-
-        raise HTTPException(
-            status_code=403,
-            detail="Sin permisos"
         )
 
     servicio.nombre =body.nombre
@@ -133,9 +107,15 @@ def editar_servicio(
 
     servicio.requiere_whatsapp = body.requiere_whatsapp
 
-    print(body.model_dump())
+    if body.profesional_id is not None:
+        profesional = db.query(Profesional).filter(
+            Profesional.id == body.profesional_id,
+            Profesional.estetica_id == user["estetica_id"],
+        ).first()
+        if not profesional:
+            raise HTTPException(status_code=400, detail="Profesional invalido")
 
-    servicio.profesional_id =body.profesional_id
+    servicio.profesional_id = body.profesional_id
 
     db.commit()
 
@@ -148,7 +128,7 @@ def eliminar_servicio(
 
     id: int,
 
-    user = Depends(get_current_user),
+    user = Depends(require_admin),
 
     db: Session = Depends(get_db)
 ):
@@ -156,7 +136,8 @@ def eliminar_servicio(
     servicio = db.query(
         Servicio
     ).filter(
-        Servicio.id == id
+        Servicio.id == id,
+        Servicio.estetica_id == user["estetica_id"],
     ).first()
 
     if not servicio:
@@ -164,16 +145,6 @@ def eliminar_servicio(
         raise HTTPException(
             status_code=404,
             detail="Servicio no encontrado"
-        )
-
-    if (
-        servicio.estetica_id
-        != user["estetica_id"]
-    ):
-
-        raise HTTPException(
-            status_code=403,
-            detail="Sin permisos"
         )
 
     servicio.activo = False

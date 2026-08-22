@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 
-from app.database import Base, engine
 from fastapi.middleware.cors import CORSMiddleware
+
+import app.models  # Registra todos los modelos en el metadata de SQLAlchemy.
 
 from app.models.cliente import Cliente
 from app.models.estetica import Estetica
@@ -15,8 +16,6 @@ from app.routes.servicios import router as servicios_router
 from app.routes.turnos import router as turnos_router
 from app.routes.dashboard import router as dashboard_router
 from app.routes.profesionales import router as profesionales_router
-
-Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 origins = [

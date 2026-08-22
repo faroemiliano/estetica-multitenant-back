@@ -3,27 +3,20 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import extract
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.database import get_db
 from app.models.cliente import Cliente
 from app.schemas.clientes import ClienteCreate, ClienteAdminCreate
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_admin
+from app.models.membership import Membership
 from app.models.user import User
 from app.models.turno import Turno
 
 
 router = APIRouter()
 
-# conexión db
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
 @router.get("/clientes")
 def obtener_clientes(
-    user = Depends(get_current_user),
+    user = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
 
@@ -34,10 +27,22 @@ def obtener_clientes(
     return clientes
 
 @router.post("/clientes")
-def crear_cliente(cliente: ClienteCreate, db: Session = Depends(get_db)):
+def crear_cliente(
+    cliente: ClienteCreate,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+
+    existente = db.query(Cliente).filter(
+        Cliente.user_id == int(user["sub"]),
+        Cliente.estetica_id == user["estetica_id"],
+    ).first()
+    if existente:
+        raise HTTPException(status_code=409, detail="El perfil ya existe")
 
     nuevo_cliente = Cliente(
-        estetica_id=cliente.estetica_id,
+        user_id=int(user["sub"]),
+        estetica_id=user["estetica_id"],
         nombre_completo=cliente.nombre_completo,
         fecha_nacimiento=cliente.fecha_nacimiento,
         telefono=cliente.telefono
@@ -56,7 +61,7 @@ def crear_cliente(cliente: ClienteCreate, db: Session = Depends(get_db)):
 @router.post("/admin/clientes")
 def crear_cliente_admin(
     body: ClienteAdminCreate,
-    user=Depends(get_current_user),
+    user=Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     if user.get("role") != "admin":
@@ -69,9 +74,10 @@ def crear_cliente_admin(
 
     if email:
         usuario = db.query(User).filter(User.email == email).first()
-        if usuario and usuario.estetica_id != user["estetica_id"]:
-            raise HTTPException(status_code=409, detail="Ese email pertenece a otra estética")
-        if usuario and usuario.cliente:
+        if usuario and db.query(Cliente).filter(
+            Cliente.user_id == usuario.id,
+            Cliente.estetica_id == user["estetica_id"],
+        ).first():
             raise HTTPException(status_code=409, detail="Ya existe un cliente con ese email")
 
     if not usuario:
@@ -83,6 +89,17 @@ def crear_cliente_admin(
         )
         db.add(usuario)
         db.flush()
+
+    membership = db.query(Membership).filter(
+        Membership.user_id == usuario.id,
+        Membership.estetica_id == user["estetica_id"],
+    ).first()
+    if not membership:
+        db.add(Membership(
+            user_id=usuario.id,
+            estetica_id=user["estetica_id"],
+            role="cliente",
+        ))
 
     nuevo_cliente = Cliente(
         user_id=usuario.id,
@@ -116,7 +133,7 @@ def obtener_cliente_admin(cliente_id: int, user: dict, db: Session):
 def actualizar_cliente_admin(
     cliente_id: int,
     body: ClienteAdminCreate,
-    user=Depends(get_current_user),
+    user=Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     cliente = obtener_cliente_admin(cliente_id, user, db)
@@ -127,23 +144,16 @@ def actualizar_cliente_admin(
     if email:
         cliente_con_email = db.query(Cliente).filter(
             Cliente.email == email,
+            Cliente.estetica_id == user["estetica_id"],
             Cliente.id != cliente.id,
         ).first()
-        usuario_con_email = db.query(User).filter(
-            User.email == email,
-            User.id != cliente.user_id,
-        ).first()
-        if cliente_con_email or usuario_con_email:
+        if cliente_con_email:
             raise HTTPException(status_code=409, detail="Ya existe otro cliente con ese email")
 
     cliente.nombre_completo = body.nombre_completo.strip()
     cliente.telefono = body.telefono.strip()
     cliente.email = email
     cliente.fecha_nacimiento = body.fecha_nacimiento
-
-    if cliente.user:
-        cliente.user.nombre = cliente.nombre_completo
-        cliente.user.email = email
 
     db.commit()
     db.refresh(cliente)
@@ -153,7 +163,7 @@ def actualizar_cliente_admin(
 @router.delete("/admin/clientes/{cliente_id}")
 def eliminar_cliente_admin(
     cliente_id: int,
-    user=Depends(get_current_user),
+    user=Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     cliente = obtener_cliente_admin(cliente_id, user, db)
@@ -169,6 +179,7 @@ def obtener_mi_perfil(
 
     cliente = db.query(Cliente).filter(
         Cliente.user_id == int(user["sub"])
+        , Cliente.estetica_id == user["estetica_id"]
     ).first()
 
     if not cliente:
@@ -191,6 +202,7 @@ def completar_perfil(
 
     cliente_existente = db.query(Cliente).filter(
         Cliente.user_id == int(user["sub"])
+        , Cliente.estetica_id == user["estetica_id"]
     ).first()
 
     # YA EXISTE
@@ -208,7 +220,7 @@ def completar_perfil(
 
         user_id=usuario.id,
 
-        estetica_id=usuario.estetica_id,
+        estetica_id=user["estetica_id"],
 
         nombre_completo=body.nombre_completo,
 
@@ -231,7 +243,7 @@ def completar_perfil(
 
 @router.get("/clientes/cumpleanios")
 def clientes_cumpleanios(
-    user=Depends(get_current_user),
+    user=Depends(require_admin),
     db: Session = Depends(get_db)
 ):
     hoy = date.today()

@@ -18,12 +18,14 @@ from app.security import create_access_token
 
 from app.dependencies import get_current_user
 
-from app.database import SessionLocal
+from app.database import get_db
 
 from app.models.user import User
 
 from app.schemas.auth import GoogleAuthRequest
 from app.models.cliente import Cliente
+from app.models.estetica import Estetica
+from app.models.membership import Membership
 
 router = APIRouter()
 
@@ -35,30 +37,6 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 # tenga conectividad IPv6. Eso deja la validación del token esperando. Forzar
 # IPv4 evita el bloqueo y no afecta el protocolo HTTPS.
 urllib3_connection.allowed_gai_family = lambda: socket.AF_INET
-
-
-def get_db():
-
-    db = SessionLocal()
-
-    try:
-        yield db
-
-    finally:
-        db.close()
-
-
-@router.post("/login-test")
-def login_test():
-
-    token = create_access_token({
-        "sub": "1",
-        "role": "admin"
-    })
-
-    return {
-        "access_token": token
-    }
 
 
 @router.get("/me")
@@ -77,6 +55,10 @@ def google_login(
     db: Session = Depends(get_db)
 ):
 
+    estetica = db.query(Estetica).filter(Estetica.slug == body.slug).first()
+    if not estetica:
+        raise HTTPException(status_code=404, detail="Estetica no encontrada")
+
     try:
 
         google_user = id_token.verify_oauth2_token(
@@ -94,9 +76,13 @@ def google_login(
 
         foto = google_user.get("picture")
 
-        user = db.query(User).filter(
-            User.email == email
-        ).first()
+        if not email or not google_id:
+            raise HTTPException(status_code=401, detail="La cuenta de Google no tiene identidad valida")
+
+        email = email.lower().strip()
+        user = db.query(User).filter(User.google_id == google_id).first()
+        if not user:
+            user = db.query(User).filter(User.email == email).first()
 
         if not user:
 
@@ -106,18 +92,42 @@ def google_login(
                 nombre=nombre,
                 foto_url=foto,
                 role="cliente",
-                estetica_id=1
+                # Columnas legacy; la autorizacion real vive en memberships.
+                estetica_id=estetica.id
             )
 
             db.add(user)
 
-            db.commit()
+            db.flush()
+        else:
+            if user.google_id and user.google_id != google_id:
+                raise HTTPException(status_code=409, detail="El email ya usa otra identidad")
+            user.google_id = google_id
+            user.nombre = nombre or user.nombre
+            user.foto_url = foto or user.foto_url
 
-            db.refresh(user)
+        membership = db.query(Membership).filter(
+            Membership.user_id == user.id,
+            Membership.estetica_id == estetica.id,
+        ).first()
+        if not membership:
+            membership = Membership(
+                user_id=user.id,
+                estetica_id=estetica.id,
+                role="cliente",
+                activo=True,
+            )
+            db.add(membership)
+        elif not membership.activo:
+            raise HTTPException(status_code=403, detail="Acceso desactivado para esta estetica")
+
+        db.commit()
+        db.refresh(user)
 
         # 🔥 BUSCAR CLIENTE
         cliente = db.query(Cliente).filter(
-            Cliente.user_id == user.id
+            Cliente.user_id == user.id,
+            Cliente.estetica_id == estetica.id,
         ).first()
 
         perfil_completo = False
@@ -129,10 +139,9 @@ def google_login(
 
             "sub": str(user.id),
 
-            "role": user.role,
-
-            "estetica_id":
-                user.estetica_id
+            "role": membership.role,
+            "estetica_id": estetica.id,
+            "slug": estetica.slug,
         })
 
         return {
@@ -141,15 +150,18 @@ def google_login(
                 "id": user.id,
                 "email": user.email,
                 "nombre": user.nombre,
-                "role": user.role,
+                "role": membership.role,
+                "estetica_id": estetica.id,
+                "slug": estetica.slug,
                 "perfil_completo": perfil_completo
             }
         }
 
-    except Exception as e:
-
-        print(e)
-
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
         raise HTTPException(
             status_code=401,
             detail="Google token inválido"
