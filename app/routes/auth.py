@@ -58,6 +58,8 @@ def google_login(
     estetica = db.query(Estetica).filter(Estetica.slug == body.slug).first()
     if not estetica:
         raise HTTPException(status_code=404, detail="Estetica no encontrada")
+    if not estetica.activo:
+        raise HTTPException(status_code=403, detail="Esta estetica se encuentra desactivada")
 
     try:
 

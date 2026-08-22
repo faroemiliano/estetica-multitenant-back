@@ -6,6 +6,7 @@ from app.security import verify_token
 from app.database import get_db
 from app.models.membership import Membership
 from app.models.user import User
+from app.models.estetica import Estetica
 
 security = HTTPBearer()
 
@@ -28,8 +29,12 @@ def get_current_user(
             Membership.activo.is_(True),
         ).first()
         user = db.query(User).filter(User.id == user_id).first()
+        estetica = db.query(Estetica).filter(
+            Estetica.id == estetica_id,
+            Estetica.activo.is_(True),
+        ).first()
 
-        if not user or not membership:
+        if not user or not membership or not estetica:
             raise HTTPException(status_code=401, detail="Sesion sin acceso a esta estetica")
 
         return {

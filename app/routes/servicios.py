@@ -160,7 +160,8 @@ def eliminar_servicio(
 def servicios_publicos(slug: str, db: Session = Depends(get_db)):
 
     estetica = db.query(Estetica).filter(
-        Estetica.slug == slug
+        Estetica.slug == slug,
+        Estetica.activo.is_(True),
     ).first()
 
     if not estetica:

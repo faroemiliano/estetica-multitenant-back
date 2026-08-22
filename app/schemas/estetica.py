@@ -28,6 +28,7 @@ class EsteticaResponse(BaseModel):
 
     nombre: str
     slug: str
+    activo: bool = True
 
     logo_url: str | None = None
     color_primario: str | None = None
@@ -54,3 +55,7 @@ class EsteticaUpdate(BaseModel):
     direccion: str | None = None
 
     horarios: str | None = None
+
+
+class EsteticaEstadoUpdate(BaseModel):
+    activo: bool

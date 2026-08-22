@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, TIMESTAMP, Time
+from sqlalchemy import Boolean, Column, Integer, String, Text, TIMESTAMP, Time
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -12,6 +12,8 @@ class Estetica(Base):
     nombre = Column(String, nullable=False)
 
     slug = Column(String, unique=True, nullable=False)
+
+    activo = Column(Boolean, nullable=False, default=True, server_default="true")
 
     logo_url = Column(Text)
 
